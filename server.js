@@ -327,24 +327,24 @@ async function startWhatsAppBot(phoneNumber, rl) {
             // Jika dipanggil atau sekadar bertanya
             if (text.toLowerCase().includes('bot') || text.toLowerCase().includes('tanya')) {
                 try {
-                    require('dotenv').config();
-                    const { GoogleGenAI } = require('@google/genai');
+                    const { exec } = require('child_process');
                     
-                    if (!process.env.GEMINI_API_KEY) {
-                        await sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Sistem AI belum diaktifkan. Admin harus memasukkan GEMINI_API_KEY di file .env." });
-                        return;
-                    }
-
-                    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-                    const response = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash',
-                        contents: `Kamu adalah Asisten Cerdas bernama Antigravity untuk aplikasi pekerja/karyawan. Jawab dengan ringkas dan profesional. Pertanyaan: ${text}`
+                    // Memanggil Antigravity CLI langsung dari sistem Linux/Termux
+                    const command = `antigravity-cli --prompt "Jawab singkat sebagai Asisten AI: ${text}"`;
+                    
+                    exec(command, async (error, stdout, stderr) => {
+                        if (error) {
+                            console.error(`Error eksekusi antigravity-cli: ${error.message}`);
+                            await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity:* Maaf, mesin otak saya sedang offline atau belum diinstal (jalankan pkg install antigravity-cli)." });
+                            return;
+                        }
+                        
+                        await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity:*\n\n" + stdout.trim() });
                     });
 
-                    await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity AI:*\n\n" + response.text });
                 } catch (e) {
                     console.error("AI Error:", e);
-                    await sock.sendMessage(msg.key.remoteJid, { text: "Maaf, mesin AI sedang mengalami gangguan." });
+                    await sock.sendMessage(msg.key.remoteJid, { text: "Maaf, mesin AI mengalami crash." });
                 }
             }
         });
