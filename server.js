@@ -598,8 +598,7 @@ async function startWhatsAppBot(phoneNumber, rl) {
             // Kirim ke Gemini CLI dengan konteks data
             const safeText = cleanText.replace(/"/g, '\\"').replace(/`/g, '');
             const safeContext = (jneContext + mabesContext).replace(/"/g, '\\"').replace(/`/g, '').substring(0, 3000);
-            
-            const command = `gemini --model gemini-3.5-flash --prompt "Kamu adalah Asisten AI Super untuk Server Mabes & JNE. Kamu punya akses data real-time dari sistem JNE SCA dan database pekerja Mabes. Gunakan data berikut untuk menjawab pertanyaan. Jawab dalam Bahasa Indonesia yang ringkas dan padat.${safeContext}\n\nPertanyaan: ${safeText}"`;
+            const command = `gemini --model gemini-2.5-flash --prompt "Kamu adalah Asisten AI Super untuk Server Mabes & JNE. Kamu punya akses data real-time dari sistem JNE SCA dan database pekerja Mabes. Gunakan data berikut untuk menjawab pertanyaan. Jawab dalam Bahasa Indonesia yang ringkas dan padat.${safeContext}\n\nPertanyaan: ${safeText}"`;
 
             exec(command, async (error, stdout, stderr) => {
                 if (error) {
