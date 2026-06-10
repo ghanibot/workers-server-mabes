@@ -143,6 +143,26 @@ app.delete('/api/notes/:id', (req, res) => {
     res.json({ success: true });
 });
 
+// 8. POST Pelanggaran GPS (GPS Dimatikan)
+app.post('/api/gps-status', (req, res) => {
+    const { whatsapp, status } = req.body;
+    
+    // Hanya bereaksi jika GPS DIMATIKAN (status = false)
+    if (status === false) {
+        let db = loadDB();
+        const user = db.users.find(u => u.whatsapp === whatsapp);
+        const name = user ? user.name : "Karyawan Tak Dikenal";
+
+        // Tampilkan notifikasi darurat di console Termux
+        console.log(`\n🚨 ALARM PELANGGARAN! 🚨`);
+        console.log(`⚠️ Pekerja: ${name} (WA: ${whatsapp})`);
+        console.log(`⚠️ Status: MEMATIKAN GPS SECARA SENGAJA!`);
+        console.log(`🚨 ALARM PELANGGARAN! 🚨\n`);
+    }
+    
+    res.json({ success: true, message: "Status received." });
+});
+
 // Start Server
 const PORT = 3000;
 app.listen(PORT, () => {
