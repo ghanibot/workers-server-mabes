@@ -357,8 +357,8 @@ async function startWhatsAppBot(phoneNumber, rl) {
             const isMentioned = contextInfo?.mentionedJid?.includes(botNumber);
             const isReplyToBot = contextInfo?.participant === botNumber;
 
-            // Di grup: hanya balas jika di-mention atau di-reply. Di japri: selalu balas.
-            if (isGroup && !isMentioned && !isReplyToBot) return;
+            // AI HANYA merespons jika di-mention (@) atau di-reply - berlaku di grup DAN japri
+            if (!isMentioned && !isReplyToBot) return;
 
             const cleanText = text.replace(/@\d+/g, '').trim();
             if (!cleanText) return;
@@ -367,7 +367,9 @@ async function startWhatsAppBot(phoneNumber, rl) {
             let processMsg = await sock.sendMessage(chatId, { text: '⏳ *[Mabes AI]* Sedang memikirkan jawaban...' }, { quoted: msg });
 
             const { exec } = await import('child_process');
-            const command = `antigravity-cli --prompt "Kamu adalah Asisten AI Server Mabes. Jawab singkat dan padat: ${cleanText}"`;
+            // Menggunakan Gemini CLI dengan model gemini-3.5-flash
+            const command = `gemini --model gemini-3.5-flash --prompt "Kamu adalah Asisten AI Server Mabes. Jawab singkat dan padat: ${cleanText}"`;
+
 
             exec(command, async (error, stdout, stderr) => {
                 if (error) {
