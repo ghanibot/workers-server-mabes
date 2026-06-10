@@ -341,32 +341,51 @@ async function startWhatsAppBot(phoneNumber, rl) {
             const msg = m.messages[0];
             if (!msg.message || msg.key.fromMe) return;
 
-            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            const messageType = Object.keys(msg.message)[0];
+            const text = msg.message.conversation || msg.message[messageType]?.text || '';
             if (!text) return;
 
-            // Jika dipanggil atau sekadar bertanya
-            if (text.toLowerCase().includes('bot') || text.toLowerCase().includes('tanya')) {
-                try {
-                    const { exec } = require('child_process');
-                    
-                    // Memanggil Antigravity CLI langsung dari sistem Linux/Termux
-                    const command = `antigravity-cli --prompt "Jawab singkat sebagai Asisten AI: ${text}"`;
-                    
-                    exec(command, async (error, stdout, stderr) => {
-                        if (error) {
-                            console.error(`Error eksekusi antigravity-cli: ${error.message}`);
-                            await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity:* Maaf, mesin otak saya sedang offline atau belum diinstal (jalankan pkg install antigravity-cli)." });
-                            return;
-                        }
-                        
-                        await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity:*\n\n" + stdout.trim() });
-                    });
+            // Perintah slash (misal /wa, /help) TIDAK dijawab AI
+            if (text.startsWith('/')) return;
 
-                } catch (e) {
-                    console.error("AI Error:", e);
-                    await sock.sendMessage(msg.key.remoteJid, { text: "Maaf, mesin AI mengalami crash." });
+            const chatId = msg.key.remoteJid;
+            const isGroup = chatId.endsWith('@g.us');
+            const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+
+            // Deteksi mention atau reply ke bot
+            const contextInfo = msg.message[messageType]?.contextInfo;
+            const isMentioned = contextInfo?.mentionedJid?.includes(botNumber);
+            const isReplyToBot = contextInfo?.participant === botNumber;
+
+            // Di grup: hanya balas jika di-mention atau di-reply. Di japri: selalu balas.
+            if (isGroup && !isMentioned && !isReplyToBot) return;
+
+            const cleanText = text.replace(/@\d+/g, '').trim();
+            if (!cleanText) return;
+
+            // Kirim penanda sedang memproses
+            let processMsg = await sock.sendMessage(chatId, { text: '⏳ *[Mabes AI]* Sedang memikirkan jawaban...' }, { quoted: msg });
+
+            const { exec } = await import('child_process');
+            const command = `antigravity-cli --prompt "Kamu adalah Asisten AI Server Mabes. Jawab singkat dan padat: ${cleanText}"`;
+
+            exec(command, async (error, stdout, stderr) => {
+                if (error) {
+                    const errMsg = (stderr || error.message || 'Unknown error').substring(0, 200);
+                    console.error(`[AI Error] ${errMsg}`);
+                    await sock.sendMessage(chatId, {
+                        text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg}\`\`\``,
+                        edit: processMsg.key
+                    });
+                    return;
                 }
-            }
+                if (stdout) {
+                    await sock.sendMessage(chatId, {
+                        text: '🤖 *Mabes AI:*\n\n' + stdout.trim(),
+                        edit: processMsg.key
+                    });
+                }
+            });
         });
 
     } catch (e) {
