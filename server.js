@@ -595,24 +595,36 @@ async function startWhatsAppBot(phoneNumber, rl) {
                 }
             } catch (e) {}
 
-            // Kirim ke Gemini CLI dengan konteks data
-            const safeText = cleanText.replace(/"/g, '\\"').replace(/`/g, '');
-            const safeContext = (jneContext + mabesContext).replace(/"/g, '\\"').replace(/`/g, '').substring(0, 3000);
-            const command = `gemini --model gemini-2.5-flash --prompt "Kamu adalah Asisten AI Super untuk Server Mabes & JNE. Kamu punya akses data real-time dari sistem JNE SCA dan database pekerja Mabes. Gunakan data berikut untuk menjawab pertanyaan. Jawab dalam Bahasa Indonesia yang ringkas dan padat.${safeContext}\n\nPertanyaan: ${safeText}"`;
+            // Kirim ke Gemini CLI menggunakan arsitektur spawn yang lebih stabil (tanpa injeksi shell)
+            const { spawn } = await import('child_process');
+            
+            const aiPrompt = `Kamu adalah Asisten AI Super untuk Server Mabes & JNE. Kamu punya akses data real-time dari sistem JNE SCA dan database pekerja Mabes. Gunakan data berikut untuk menjawab pertanyaan. Jawab dalam Bahasa Indonesia yang ringkas dan padat.\n\n${jneContext}\n${mabesContext}\n\nPertanyaan: ${cleanText}`;
 
-            exec(command, async (error, stdout, stderr) => {
-                if (error) {
-                    const errMsg = (stderr || error.message || 'Unknown error').substring(0, 200);
+            // Jika di Windows, gemini CLI biasanya dijalankan melalui cmd.exe
+            const isWin = process.platform === "win32";
+            const cmdBin = isWin ? "gemini.cmd" : "gemini";
+            
+            const child = spawn(cmdBin, ["--model", "gemini-3.1-pro", "--prompt", aiPrompt], {
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+
+            let outData = "";
+            let errData = "";
+
+            child.stdout.on('data', (chunk) => outData += chunk.toString());
+            child.stderr.on('data', (chunk) => errData += chunk.toString());
+
+            child.on('close', async (code) => {
+                if (code !== 0 && !outData.trim()) {
+                    const errMsg = (errData || `Exited with code ${code}`).substring(0, 300);
                     console.error(`[AI Error] ${errMsg}`);
                     await sock.sendMessage(chatId, {
                         text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg}\`\`\``,
                         edit: processMsg.key
                     });
-                    return;
-                }
-                if (stdout) {
+                } else if (outData.trim()) {
                     await sock.sendMessage(chatId, {
-                        text: '🤖 *Mabes AI:*\n\n' + stdout.trim(),
+                        text: '🤖 *Mabes AI:*\n\n' + outData.trim(),
                         edit: processMsg.key
                     });
                 }
