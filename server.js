@@ -302,8 +302,11 @@ async function startWhatsAppBot(phoneNumber, rl) {
 
         sock.ev.on('creds.update', saveCreds);
 
-        if (!sock.authState.creds.registered) {
-            setTimeout(async () => {
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+            
+            // Minta Pairing Code HANYA ketika socket sudah benar-benar siap (ditandai dengan munculnya event QR)
+            if (qr && !sock.authState.creds.registered) {
                 try {
                     const code = await sock.requestPairingCode(phoneNumber);
                     console.log(`\n=========================================`);
@@ -317,14 +320,11 @@ async function startWhatsAppBot(phoneNumber, rl) {
                     console.log(`=========================================\n`);
                     rl.prompt();
                 } catch (err) {
-                    console.log('Gagal meminta Pairing Code:', err);
+                    console.log('\n❌ Gagal meminta Pairing Code. Coba muat ulang server.', err.message);
                     rl.prompt();
                 }
-            }, 3000);
-        }
+            }
 
-        sock.ev.on('connection.update', (update) => {
-            const { connection, lastDisconnect } = update;
             if (connection === 'close') {
                 console.log('\n❌ Koneksi WA terputus.');
                 rl.prompt();
