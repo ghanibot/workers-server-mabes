@@ -314,6 +314,41 @@ async function startWhatsAppBot(phoneNumber, rl) {
             }
         });
 
+        // ==========================================
+        // AI QUESTION ANSWERING ENGINE (ANTIGRAVITY)
+        // ==========================================
+        sock.ev.on('messages.upsert', async (m) => {
+            const msg = m.messages[0];
+            if (!msg.message || msg.key.fromMe) return;
+
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            if (!text) return;
+
+            // Jika dipanggil atau sekadar bertanya
+            if (text.toLowerCase().includes('bot') || text.toLowerCase().includes('tanya')) {
+                try {
+                    require('dotenv').config();
+                    const { GoogleGenAI } = require('@google/genai');
+                    
+                    if (!process.env.GEMINI_API_KEY) {
+                        await sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Sistem AI belum diaktifkan. Admin harus memasukkan GEMINI_API_KEY di file .env." });
+                        return;
+                    }
+
+                    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: `Kamu adalah Asisten Cerdas bernama Antigravity untuk aplikasi pekerja/karyawan. Jawab dengan ringkas dan profesional. Pertanyaan: ${text}`
+                    });
+
+                    await sock.sendMessage(msg.key.remoteJid, { text: "🤖 *Antigravity AI:*\n\n" + response.text });
+                } catch (e) {
+                    console.error("AI Error:", e);
+                    await sock.sendMessage(msg.key.remoteJid, { text: "Maaf, mesin AI sedang mengalami gangguan." });
+                }
+            }
+        });
+
     } catch (e) {
         console.error("Gagal memulai modul WhatsApp:", e);
         rl.prompt();

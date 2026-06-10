@@ -10,9 +10,11 @@
   "keywords": [],
   "author": "",
   "dependencies": {
+    "@google/genai": "^2.8.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pino": "^10.3.1"
   }
