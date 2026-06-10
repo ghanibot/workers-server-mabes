@@ -1,0 +1,20 @@
+{
+  "users": [
+    {
+      "name": "GHANI",
+      "age": "15",
+      "dob": "21/01/2011",
+      "whatsapp": "6282171827205",
+      "password": "GHANI",
+      "isBanned": false
+    }
+  ],
+  "locations": {
+    "6282171827205": {
+      "name": "GHANI",
+      "lat": 0.4242349,
+      "lng": 103.5405464,
+      "timestamp": "2026-06-10T00:58:56.305Z"
+    }
+  }
+}

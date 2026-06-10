@@ -1,0 +1,19 @@
+{
+  "name": "workers-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pino": "^10.3.1"
+  }
+}
