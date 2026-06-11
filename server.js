@@ -360,7 +360,8 @@ async function startWhatsAppBot(phoneNumber, rl) {
             const isWin = process.platform === "win32";
             const cmdBin = isWin ? "gemini.cmd" : "gemini";
             
-            const child = spawn(cmdBin, ["--model", "gemini-3.1-pro", "--prompt", aiPrompt], {
+            // Panggil AI secara super cepat tanpa extensions/tools (-e none), format teks murni (-o text)
+            const child = spawn(cmdBin, ["-e", "none", "-y", "-o", "text", "--model", "gemini-2.5-flash", "--prompt", aiPrompt], {
                 stdio: ['ignore', 'pipe', 'pipe']
             });
 
