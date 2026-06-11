@@ -129,6 +129,28 @@ app.delete('/api/notes/:id', (req, res) => {
     res.json({ success: true });
 });
 
+// 8. OTA Update Checker
+app.get('/api/check-update', (req, res) => {
+    // Ubah angka ini (latestVersion) setiap kali Anda mengunggah APK baru ke folder /updates
+    res.json({
+        success: true,
+        latestVersion: 2, 
+        versionName: "v2.0-AutoSync",
+        downloadUrl: "/api/download-apk",
+        releaseNotes: "✅ Sistem tersinkronisasi otomatis\n✅ Fitur Auto-Update OTA Aktif\n✅ Koneksi Server Stabil"
+    });
+});
+
+// 9. OTA APK Downloader
+app.get('/api/download-apk', (req, res) => {
+    const apkPath = path.join(__dirname, 'updates', 'app-release.apk');
+    if (fs.existsSync(apkPath)) {
+        res.download(apkPath, 'Mabes_Worker_App.apk');
+    } else {
+        res.status(404).json({ error: 'Update file not found on server.' });
+    }
+});
+
 // Start Server
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
