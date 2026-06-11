@@ -13,6 +13,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+let globalSock = null;
+
 const DB_FILE = 'database.json';
 
 // Initialize DB if not exists
@@ -68,7 +70,7 @@ app.post('/api/location', (req, res) => {
 });
 
 // 3. Alert GPS Dimatikan
-app.post('/api/gps-status', (req, res) => {
+app.post('/api/gps-status', async (req, res) => {
     const { whatsapp, status } = req.body;
     if (status === false) {
         let db = loadDB();
@@ -78,6 +80,18 @@ app.post('/api/gps-status', (req, res) => {
         console.log(`⚠️ Pekerja: ${name} (WA: ${whatsapp})`);
         console.log(`⚠️ Status: MEMATIKAN GPS SECARA SENGAJA!`);
         console.log(`🚨 ALARM PELANGGARAN! 🚨\n`);
+
+        // REAL-TIME WARNING
+        if (globalSock && whatsapp) {
+            try {
+                await globalSock.sendMessage(whatsapp + "@s.whatsapp.net", { 
+                    text: `⚠️ *TEGURAN REAL-TIME DARI SERVER MABES* ⚠️\n\nHalo ${name}, sistem pusat kami baru saja mendeteksi bahwa Anda **Sengaja Mematikan Pelacakan GPS** pada detik ini juga.\n\nSesuai standar operasional, Anda diwajibkan untuk tetap menyalakan GPS (Status Tracking Aktif) selama jam kerja.\nMohon buka kembali aplikasi *AI Agent Contribution* dan nyalakan pelacakannya sekarang juga!` 
+                });
+                console.log(`[REAL-TIME] Pesan peringatan langsung ditembakkan ke ${name} (${whatsapp})!`);
+            } catch (err) {
+                console.error("[REAL-TIME] Gagal mengirim pesan peringatan:", err.message);
+            }
+        }
     }
     res.json({ success: true });
 });
@@ -253,6 +267,8 @@ async function startWhatsAppBot(phoneNumber, rl) {
             browser: ["Ubuntu", "Chrome", "120.0.0"],
             printQRInTerminal: false
         });
+
+        globalSock = sock;
 
         sock.ev.on('creds.update', saveCreds);
 
