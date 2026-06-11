@@ -286,6 +286,37 @@ async function startWhatsAppBot(phoneNumber, rl) {
                 rl.prompt();
             } else if (connection === 'open') {
                 console.log('\n✅ Bot WhatsApp Berhasil Terhubung ke Mabes!');
+                
+                // [TASK 5] Fitur kelima: Background GPS Monitor
+                // Memantau pekerja yang GPS-nya mati/tidak lapor lokasi.
+                setInterval(async () => {
+                    try {
+                        const db = loadDB();
+                        const now = new Date();
+                        db.users.forEach(async (u) => {
+                            if (u.isBanned) return; // Abaikan jika dibanned
+                            
+                            const loc = db.locations[u.whatsapp];
+                            if (loc && loc.timestamp) {
+                                const lastUpdate = new Date(loc.timestamp);
+                                const diffMinutes = (now - lastUpdate) / (1000 * 60);
+                                
+                                // Jika GPS mati/terputus selama 30 - 45 menit, kirim 1x peringatan
+                                if (diffMinutes > 30 && diffMinutes <= 45) {
+                                    try {
+                                        await sock.sendMessage(u.whatsapp + "@s.whatsapp.net", { 
+                                            text: "⚠️ *PERINGATAN OTOMATIS MABES*\n\nSistem mendeteksi bahwa GPS Anda mati atau tidak memperbarui lokasi selama lebih dari 30 menit.\n\nMohon buka kembali aplikasi *AI Agent Contribution* dan pastikan fitur pelacakan aktif." 
+                                        });
+                                        console.log(`[GPS Monitor] Peringatan GPS mati dikirim ke ${u.name} (${u.whatsapp})`);
+                                    } catch (e) {}
+                                }
+                            }
+                        });
+                    } catch (e) {
+                        console.error("[GPS Monitor] Error:", e.message);
+                    }
+                }, 15 * 60 * 1000); // Cek setiap 15 menit
+
                 rl.prompt();
             }
         });
@@ -354,7 +385,19 @@ async function startWhatsAppBot(phoneNumber, rl) {
                 });
             }
 
-            const aiPrompt = `Kamu adalah Asisten AI Server Mabes.\n\n${memoryContext}\n\nKamu punya data pekerja Mabes berikut untuk membantu menjawab pertanyaan jika diperlukan:\n${mabesContext}\n\nJawab dalam Bahasa Indonesia yang ringkas dan padat.\n\nPertanyaan Baru dari User: ${cleanText}`;
+            const aiPrompt = `Kamu adalah Asisten AI Server Mabes. Kamu ramah dan bisa diajak ngobrol santai tentang apa saja.
+
+${memoryContext}
+
+Kamu punya data pekerja Mabes berikut untuk membantu menjawab pertanyaan jika diperlukan:
+${mabesContext}
+
+INSTRUKSI WAJIB:
+1. Jika ditanya lokasi seseorang di data, WAJIB berikan koordinatnya dan sertakan link Google Maps dengan format persis: https://www.google.com/maps?q=loc:[Lat],[Lng]+([Nama_Pekerja])
+2. Jika ditanya orang yang TIDAK ADA dalam data di atas, katakan dengan jelas bahwa orang tersebut tidak ada di data atau belum terdaftar.
+3. Jawab dalam Bahasa Indonesia yang ringkas, luwes, dan padat.
+
+Pertanyaan Baru dari User: ${cleanText}`;
 
             // Obfuscate API keys to bypass GitHub Secret Scanning Push Protection
             const rawGcp = "AIzaS" + "yCo_8Z" + "zfQR9y" + "F_UNFG" + "rT-20tqE" + "Y4pPVMWo,AIza" + "SyBKfa7" + "wiWaBN2" + "EDdvNjg" + "lVCYC-m" + "9G7YEjY,AQ" + ".Ab8RN6Ipd" + "oc1R2Fd" + "0E6ENgmz" + "DjJZSRf6" + "dIf2qy9F" + "7ukwOX8q" + "SQ,AQ" + ".Ab8RN6IY" + "A6ha3bh5" + "NgzsaeM" + "SBRyCi" + "iuvLwBd" + "ZL5KEl5a" + "Jlf5pw";
