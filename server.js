@@ -379,8 +379,8 @@ async function startWhatsAppBot(phoneNumber, rl) {
                     break;
                 } catch (error) {
                     const status = error.response ? error.response.status : null;
-                    if (status === 429) {
-                        console.log(`[Mabes AI] Key ${apiKey.substring(0,8)} Limit. Rotasi...`);
+                    if (status === 429 || status === 403) {
+                        console.log(`[Mabes AI] Key Limit/Leaked (${status}). Rotasi...`);
                         continue;
                     }
                     lastErr = error.response ? JSON.stringify(error.response.data) : error.message;
