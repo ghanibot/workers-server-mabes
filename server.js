@@ -361,46 +361,43 @@ async function startWhatsAppBot(phoneNumber, rl) {
             const API_KEYS = rawGcp.split(',');
             const apiKey = API_KEYS[Math.floor(Math.random() * API_KEYS.length)];
 
-            const { spawn } = await import('child_process');
-            const isWin = process.platform === "win32";
-            const cmdBin = isWin ? "gemini.cmd" : "gemini";
+            const { default: axios } = await import('axios');
+            
+            let aiResponse = "";
+            let success = false;
+            let lastErr = "";
 
-            let child;
-            if (isWin) {
-                // Windows CMD membutuhkan shell: true, dan argumen multiline sering error
-                // sehingga kita merubah baris baru menjadi spasi dan meng-quote stringnya.
-                const safePrompt = aiPrompt.replace(/"/g, '\\"').replace(/\n/g, ' ');
-                child = spawn(cmdBin, ["-e", "none", "-y", "-o", "text", "-m", "gemini-2.5-flash", "--prompt", `"${safePrompt}"`], {
-                    shell: true,
-                    env: { ...process.env, GEMINI_API_KEY: apiKey }
-                });
-            } else {
-                // Termux / Linux menangani argumen array dengan sangat aman tanpa shell
-                child = spawn(cmdBin, ["-e", "none", "-y", "-o", "text", "-m", "gemini-2.5-flash", "--prompt", aiPrompt], {
-                    shell: false,
-                    env: { ...process.env, GEMINI_API_KEY: apiKey }
-                });
+            for (const apiKey of API_KEYS) {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                try {
+                    const response = await axios.post(url, {
+                        contents: [{ parts: [{ text: aiPrompt }] }]
+                    }, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+
+                    aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                    success = true;
+                    break;
+                } catch (error) {
+                    const status = error.response ? error.response.status : null;
+                    if (status === 429) {
+                        console.log(`[Mabes AI] Key ${apiKey.substring(0,8)} Limit. Rotasi...`);
+                        continue;
+                    }
+                    lastErr = error.response ? JSON.stringify(error.response.data) : error.message;
+                    break;
+                }
             }
 
-            let outData = "";
-            let errData = "";
-
-            child.stdout.on('data', (chunk) => outData += chunk.toString());
-            child.stderr.on('data', (chunk) => errData += chunk.toString());
-
-            child.on('close', async (code) => {
-                const cleanOut = outData.trim();
-                if (code !== 0 && !cleanOut) {
-                    const finalErr = errData.trim().substring(0,300);
-                    console.error(`[AI Error] ${finalErr}`);
-                    await sock.sendMessage(chatId, { text: `❌ *Mabes AI Error:*\n\`\`\`${finalErr}\`\`\``, edit: processMsg.key });
-                } else if (cleanOut) {
-                    db.chat_history[chatId].push({ role: 'user', content: cleanText });
-                    db.chat_history[chatId].push({ role: 'ai', content: cleanOut });
-                    saveDB(db);
-                    await sock.sendMessage(chatId, { text: '🤖 *Mabes AI:*\n\n' + cleanOut, edit: processMsg.key });
-                }
-            });
+            if (success) {
+                db.chat_history[chatId].push({ role: 'user', content: cleanText });
+                db.chat_history[chatId].push({ role: 'ai', content: aiResponse });
+                saveDB(db);
+                await sock.sendMessage(chatId, { text: '🤖 *Mabes AI:*\n\n' + aiResponse, edit: processMsg.key });
+            } else {
+                const finalErr = lastErr || "Semua API Key telah mencapai limit (429).";
+                console.error(`[AI Error] ${finalErr}`);
+                await sock.sendMessage(chatId, { text: `❌ *Mabes AI Error:*\n\`\`\`${finalErr.substring(0,300)}\`\`\``, edit: processMsg.key });
+            }
         });
 
     } catch (e) {
