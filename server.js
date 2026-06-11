@@ -17,13 +17,13 @@ const DB_FILE = 'database.json';
 
 // Initialize DB if not exists
 if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ users: [], locations: {}, notes: [] }, null, 2));
+    fs.writeFileSync(DB_FILE, JSON.stringify({ users: [], locations: {}, notes: [], chat_history: {} }, null, 2));
 }
 
 // Load DB
 function loadDB() {
     try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')); }
-    catch(e) { return { users: [], locations: {}, notes: [] }; }
+    catch(e) { return { users: [], locations: {}, notes: [], chat_history: {} }; }
 }
 
 // Save DB
@@ -305,39 +305,57 @@ async function startWhatsAppBot(phoneNumber, rl) {
             if (text.startsWith('/')) return;
 
             const chatId = msg.key.remoteJid;
+            const isGroup = chatId.endsWith('@g.us');
+            const isPrivate = !isGroup;
             const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
             const contextInfo = msg.message[messageType]?.contextInfo;
             const isMentioned = contextInfo?.mentionedJid?.includes(botNumber);
             const isReplyToBot = contextInfo?.participant === botNumber;
 
             // ==========================================
-            // AI AGENT (Hanya merespons jika di-mention / di-reply)
+            // AI AGENT LOGIC (Arsitektur Paper-Trading)
             // ==========================================
-            if (!isMentioned && !isReplyToBot) return;
+            // Hanya merespons dan menyimpan memori jika:
+            // 1. Private Message (DM) -> Selalu
+            // 2. Group Chat -> HANYA jika bot di-tag atau di-reply
+            const shouldRespond = isPrivate || isMentioned || isReplyToBot;
+            if (!shouldRespond) return;
 
             const cleanText = text.replace(/@\d+/g, '').trim();
             if (!cleanText) return;
 
+            // Load DB untuk Memory & Data Mabes
+            let db = loadDB();
+            if (!db.chat_history) db.chat_history = {};
+            if (!db.chat_history[chatId]) db.chat_history[chatId] = [];
+
+            // Batasi memori maksimal 10 percakapan terakhir agar tidak kepanjangan
+            if (db.chat_history[chatId].length > 10) {
+                db.chat_history[chatId] = db.chat_history[chatId].slice(-10);
+            }
+            
+            // Format memori percakapan
+            let memoryContext = "Riwayat Percakapan Sebelumnya:\n";
+            db.chat_history[chatId].forEach(m => {
+                memoryContext += `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}\n`;
+            });
+            if (db.chat_history[chatId].length === 0) memoryContext = "Belum ada riwayat percakapan.";
+
             // Kirim penanda sedang memproses
             let processMsg = await sock.sendMessage(chatId, { text: '⏳ *[Mabes AI]* Sedang memikirkan jawaban...' }, { quoted: msg });
 
-            // Sertakan data pekerja Mabes sebagai konteks
             let mabesContext = "";
-            try {
-                const db = loadDB();
-                if (db.users.length > 0) {
-                    mabesContext += `\n\n[DATA PEKERJA MABES]:`;
-                    db.users.forEach(u => {
-                        const loc = db.locations[u.whatsapp];
-                        const locStr = loc ? `Lat: ${loc.lat}, Lng: ${loc.lng} (${loc.timestamp})` : "Tidak ada data lokasi";
-                        mabesContext += `\n- ${u.name} (WA: ${u.whatsapp}), Banned: ${u.isBanned}, Lokasi: ${locStr}`;
-                    });
-                }
-            } catch (e) {}
+            if (db.users.length > 0) {
+                mabesContext += `\n\n[DATA PEKERJA MABES]:`;
+                db.users.forEach(u => {
+                    const loc = db.locations[u.whatsapp];
+                    const locStr = loc ? `Lat: ${loc.lat}, Lng: ${loc.lng} (${loc.timestamp})` : "Tidak ada data lokasi";
+                    mabesContext += `\n- ${u.name} (WA: ${u.whatsapp}), Banned: ${u.isBanned}, Lokasi: ${locStr}`;
+                });
+            }
 
-            const aiPrompt = `Kamu adalah Asisten AI Server Mabes. Kamu punya data pekerja Mabes berikut untuk membantu menjawab pertanyaan jika diperlukan:\n${mabesContext}\n\nJawab dalam Bahasa Indonesia yang ringkas dan padat.\n\nPertanyaan: ${cleanText}`;
+            const aiPrompt = `Kamu adalah Asisten AI Server Mabes.\n\n${memoryContext}\n\nKamu punya data pekerja Mabes berikut untuk membantu menjawab pertanyaan jika diperlukan:\n${mabesContext}\n\nJawab dalam Bahasa Indonesia yang ringkas dan padat.\n\nPertanyaan Baru dari User: ${cleanText}`;
 
-            // Menggunakan spawn (arsitektur dari Putri-v11) untuk mengeksekusi gemini CLI secara aman
             const { spawn } = await import('child_process');
             const isWin = process.platform === "win32";
             const cmdBin = isWin ? "gemini.cmd" : "gemini";
@@ -356,15 +374,17 @@ async function startWhatsAppBot(phoneNumber, rl) {
                 if (code !== 0 && !outData.trim()) {
                     const errMsg = (errData || `Exited with code ${code}`).substring(0, 300);
                     console.error(`[AI Error] ${errMsg}`);
-                    await sock.sendMessage(chatId, {
-                        text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg}\`\`\``,
-                        edit: processMsg.key
-                    });
+                    await sock.sendMessage(chatId, { text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg}\`\`\``, edit: processMsg.key });
                 } else if (outData.trim()) {
-                    await sock.sendMessage(chatId, {
-                        text: '🤖 *Mabes AI:*\n\n' + outData.trim(),
-                        edit: processMsg.key
-                    });
+                    const aiResponse = outData.trim();
+                    
+                    // Simpan percakapan ke memory HANYA JIKA AI berhasil merespons!
+                    // Ini memastikan bot tidak menyimpan percakapan nyasar dari grup.
+                    db.chat_history[chatId].push({ role: 'user', content: cleanText });
+                    db.chat_history[chatId].push({ role: 'ai', content: aiResponse });
+                    saveDB(db);
+
+                    await sock.sendMessage(chatId, { text: '🤖 *Mabes AI:*\n\n' + aiResponse, edit: processMsg.key });
                 }
             });
         });
