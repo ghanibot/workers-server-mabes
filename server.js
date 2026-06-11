@@ -356,38 +356,28 @@ async function startWhatsAppBot(phoneNumber, rl) {
 
             const aiPrompt = `Kamu adalah Asisten AI Server Mabes.\n\n${memoryContext}\n\nKamu punya data pekerja Mabes berikut untuk membantu menjawab pertanyaan jika diperlukan:\n${mabesContext}\n\nJawab dalam Bahasa Indonesia yang ringkas dan padat.\n\nPertanyaan Baru dari User: ${cleanText}`;
 
-            const { spawn } = await import('child_process');
-            const isWin = process.platform === "win32";
-            const cmdBin = isWin ? "gemini.cmd" : "gemini";
-            
-            // Panggil AI secara super cepat tanpa extensions/tools (-e none), format teks murni (-o text)
-            const child = spawn(cmdBin, ["-e", "none", "-y", "-o", "text", "--model", "gemini-2.5-flash", "--prompt", aiPrompt], {
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
+            const axios = (await import('axios')).default;
+            const apiKey = "AIzaSyCo_8ZzfQR9yF_UNFGrT-20tqEY4pPVMWo";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-            let outData = "";
-            let errData = "";
+            try {
+                const response = await axios.post(url, {
+                    contents: [{ parts: [{ text: aiPrompt }] }]
+                }, { headers: { 'Content-Type': 'application/json' } });
 
-            child.stdout.on('data', (chunk) => outData += chunk.toString());
-            child.stderr.on('data', (chunk) => errData += chunk.toString());
+                const aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                
+                // Simpan percakapan ke memory HANYA JIKA AI berhasil merespons!
+                db.chat_history[chatId].push({ role: 'user', content: cleanText });
+                db.chat_history[chatId].push({ role: 'ai', content: aiResponse });
+                saveDB(db);
 
-            child.on('close', async (code) => {
-                if (code !== 0 && !outData.trim()) {
-                    const errMsg = (errData || `Exited with code ${code}`).substring(0, 300);
-                    console.error(`[AI Error] ${errMsg}`);
-                    await sock.sendMessage(chatId, { text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg}\`\`\``, edit: processMsg.key });
-                } else if (outData.trim()) {
-                    const aiResponse = outData.trim();
-                    
-                    // Simpan percakapan ke memory HANYA JIKA AI berhasil merespons!
-                    // Ini memastikan bot tidak menyimpan percakapan nyasar dari grup.
-                    db.chat_history[chatId].push({ role: 'user', content: cleanText });
-                    db.chat_history[chatId].push({ role: 'ai', content: aiResponse });
-                    saveDB(db);
-
-                    await sock.sendMessage(chatId, { text: '🤖 *Mabes AI:*\n\n' + aiResponse, edit: processMsg.key });
-                }
-            });
+                await sock.sendMessage(chatId, { text: '🤖 *Mabes AI:*\n\n' + aiResponse, edit: processMsg.key });
+            } catch (error) {
+                const errMsg = error.response ? JSON.stringify(error.response.data) : error.message;
+                console.error(`[AI Error] ${errMsg}`);
+                await sock.sendMessage(chatId, { text: `❌ *Mabes AI Error:*\n\`\`\`${errMsg.substring(0,300)}\`\`\``, edit: processMsg.key });
+            }
         });
 
     } catch (e) {
